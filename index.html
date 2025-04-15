@@ -1,0 +1,164 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PDF Compressor with Bootstrap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d6efd" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    body {
+      background: linear-gradient(135deg, #f0f8ff, #e6e6fa);
+    }
+    .card {
+      background: white;
+      border-radius: 20px;
+      overflow: hidden;
+    }
+    .card-title {
+      color: #0d6efd;
+      font-weight: bold;
+    }
+    .btn-primary {
+      background-color: #0d6efd;
+      border-color: #0d6efd;
+    }
+    .btn-outline-secondary {
+      border-color: #6c757d;
+    }
+    .form-label {
+      font-weight: bold;
+      color: #333;
+    }
+    .form-control, .form-range {
+      border-radius: 10px;
+    }
+    #status {
+      color: #6c757d;
+    }
+    #downloadLink {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+<div class="container py-5">
+  <div class="card shadow-lg p-4">
+    <div class="card-body">
+      <h2 class="card-title text-center mb-4">Offline PDF Compressor</h2>
+      <div class="mb-3">
+        <label for="upload" class="form-label">Upload PDF File</label>
+        <input class="form-control" type="file" id="upload" accept="application/pdf">
+      </div>
+      <div class="mb-3">
+        <label for="quality" class="form-label">
+          Image Quality: <span id="qualityValue">0.5</span>
+        </label>
+        <div class="d-flex align-items-center">
+          <span class="me-2">Low</span>
+          <input type="range" class="form-range flex-fill" id="quality" min="0.1" max="1" step="0.1" value="0.5">
+          <span class="ms-2">High</span>
+        </div>
+      </div>
+      <div class="d-grid gap-2">
+        <button class="btn btn-primary" id="compressBtn">Compress PDF</button>
+        <button class="btn btn-outline-secondary" id="resetBtn">Mulai Kembali</button>
+      </div>
+      <div id="status" class="text-muted mt-3 text-center small"></div>
+      <div class="d-grid mt-4">
+        <a id="downloadLink" class="btn btn-success d-none" download="compressed.pdf">Download Compressed PDF</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="js/pdf.min.js"></script>
+<script src="js/pdf.worker.min.js"></script>
+<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdf.worker.min.js';
+
+    const qualitySlider = document.getElementById("quality");
+    const qualityValue = document.getElementById("qualityValue");
+    const uploadInput = document.getElementById("upload");
+    const downloadLink = document.getElementById("downloadLink");
+    const status = document.getElementById("status");
+    const compressBtn = document.getElementById("compressBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    qualitySlider.addEventListener("input", () => {
+      qualityValue.textContent = qualitySlider.value;
+    });
+
+    compressBtn.addEventListener("click", async () => {
+      const quality = parseFloat(qualitySlider.value);
+      if (!uploadInput.files.length) {
+        alert('Please upload a PDF file.');
+        return;
+      }
+      uploadInput.disabled = true;
+      downloadLink.classList.add('d-none');
+      const file = uploadInput.files[0];
+      const fileReader = new FileReader();
+      status.textContent = 'Loading PDF...';
+      fileReader.onload = async function () {
+        const typedArray = new Uint8Array(this.result);
+        const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+        const newPdfDoc = await PDFLib.PDFDocument.create();
+        for (let i = 0; i < pdf.numPages; i++) {
+          status.textContent = `Processing page ${i + 1} of ${pdf.numPages}...`;
+          const page = await pdf.getPage(i + 1);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const context = canvas.getContext('2d');
+          await page.render({ canvasContext: context, viewport: viewport }).promise;
+          const imageDataUrl = canvas.toDataURL('image/jpeg', quality);
+          const jpgImageBytes = await fetch(imageDataUrl).then(res => res.arrayBuffer());
+          const jpgImage = await newPdfDoc.embedJpg(jpgImageBytes);
+          const pageWidth = jpgImage.width;
+          const pageHeight = jpgImage.height;
+          const pdfPage = newPdfDoc.addPage([pageWidth, pageHeight]);
+          pdfPage.drawImage(jpgImage, {
+            x: 0,
+            y: 0,
+            width: pageWidth,
+            height: pageHeight,
+          });
+        }
+        status.textContent = 'Saving compressed PDF...';
+        const compressedPdfBytes = await newPdfDoc.save();
+        const blob = new Blob([compressedPdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        downloadLink.href = url;
+        downloadLink.classList.remove('d-none');
+        status.textContent = 'Done!';
+      };
+      fileReader.readAsArrayBuffer(file);
+    });
+
+    resetBtn.addEventListener("click", () => {
+      uploadInput.value = '';
+      uploadInput.disabled = false;
+      downloadLink.classList.add('d-none');
+      status.textContent = '';
+      qualitySlider.value = 0.5;
+      qualityValue.textContent = '0.5';
+    });
+  });
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(reg => console.log('Service worker registered:', reg.scope))
+        .catch(err => console.error('Service worker failed:', err));
+    });
+  }
+</script>
+</body>
+</html>
