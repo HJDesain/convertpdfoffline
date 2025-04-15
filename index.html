@@ -74,8 +74,13 @@
     </div>
   </div>
 </div>
-<script src="js/pdf.min.js"></script>
-<script src="js/pdf.worker.min.js"></script>
+<!-- Gunakan CDN untuk PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+</script>
+
+<!-- Library PDF-lib -->
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
